@@ -93,4 +93,4 @@ function walkAndObserve(doc) {
         titleObserver.observe(docTitle, observerConfig);
     }
 }
-walkAndObserve("C:\\Users\\dlwal\\Documents\\GitHub\\marg_rev_comments\\Stock Volatility and the War Puzzle - Marginal REVOLUTION.html");
+walkAndObserve("C:\\Users\\dlwal\\Documents\\GitHub\\marg_rev_comments\\stock.html");

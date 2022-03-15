@@ -1,0 +1,510 @@
+(function($, Backbone){
+  var pageDepth = 4, // Zero Indexed
+    EndlessThread;
+
+
+    // Comparison Functions
+    window.compareByRecentNewFirst = function(a, b) {
+      return moment(b.date).unix() - moment(a.date).unix();
+    }
+
+    window.compareByVotes = function(a, b) {
+      diff = b.vote_total - a.vote_total;
+      if(diff !== 0) {
+        return b.vote_total - a.vote_total;
+      }
+
+      // If equivalent, earlier post first.
+      return window.compareByRecentOldFirst(a, b);
+    }
+
+    window.compareByRecentOldFirst = function(a, b) {
+      return moment(a.date).unix() - moment(b.date).unix();
+    }
+
+    window.compareByControversy = function (a, b) {
+      aCont = getControversy(a);
+      bCont = getControversy(b);
+
+      // Subtracting B from A ensures largest number goes first
+      diff = bCont - aCont;
+
+      if(diff !== 0) {
+        return bCont - aCont;
+      }
+
+      // If equivalent, earlier post first.
+      return window.compareByRecentOldFirst(a, b);
+    }
+
+    // Sorting functions
+    window.sortByrecent = function (arr) {
+      if(!arr.isSorted) {
+        arr.sort(window.compareByRecentNewFirst);
+
+        for(var i = 0; i < arr.length; i++) {
+          if(arr[i].children) {
+            arr[i].children = window.sortByrecent(arr[i].children);
+           }
+        }
+
+        arr.isSorted = true;
+      }
+
+      return arr;
+    }
+
+    window.sortBytop = function (arr) {
+      if(!arr.isSorted) {
+        
+        arr.sort(window.compareByVotes);
+
+        for(var i = 0; i < arr.length; i++) {
+          if(arr[i].children) {
+           arr[i].children = window.sortBytop(arr[i].children);
+          }
+        }
+
+        arr.isSorted = true;
+      }
+
+      return arr;
+    };
+
+    window.sortBycontroversial = function (arr) {
+      if(!arr.isSorted) {
+        
+        arr.sort(window.compareByControversy);
+
+        for(var i = 0; i < arr.length; i++) {
+          if(arr[i].children) {
+            arr[i].children = window.sortBytop(arr[i].children);
+          }
+        }
+
+        arr.isSorted = true;
+      }
+
+      return arr;
+    }
+
+    // Computation Functions
+    function getControversy(comment) {
+      var balance;
+
+      if(!comment.updoots || !comment.downboops) {
+        return 0;
+      }
+      
+      balance = comment.updoots > comment.downboops ? comment.downboops / comment.updoots : comment.updoots / comment.downboops;
+
+      return Math.pow((comment.updoots + comment.downboops), balance);
+    }
+
+    window.clearSorted = function (arr) {
+      arr.isSorted = false;
+
+      for(var i = 0; i < arr.length; i++) {
+        if(arr[i].children) {
+          arr[i].children = window.clearSorted(arr[i].children);
+        }
+      }
+
+      return arr;
+    }
+
+
+  EndlessThread = Backbone.View.extend({
+    initialize: function(){
+      var self = this,
+      defaults = {
+        currentDepth: 0,
+        pageDepth: pageDepth
+      },
+      hasChanged = false;
+      
+      this.state = new Backbone.Model();
+
+      this.$sortSelect = $('#comment_sort');
+
+      // commentID tells the view whether or not there's a specific comment who's children we're showing.
+      this.state.set('commentID', parseInt(this.utilities.getQueryParam('commentID', window.location.href)) || null);
+
+      // currentDepth tells us the depth of the topmost viewable comment when in 'single' mode.
+      this.state.set('currentDepth', this.utilities.getQueryParam('currentDepth', window.location.href) || defaults.currentDepth);
+
+      // pageDepth tell us how many child comments we should show at any given depth
+      // 0 would mean  "only the top level", 1 would be "parent and one child", etc.
+      this.state.set('pageDepth', this.utilities.getQueryParam('pageDepth', window.location.href) || defaults.pageDepth);
+
+      this.comments = JSON.parse(this.el.getAttribute('data-json'));
+
+      userSort = window.utilities.cookies.get('mrsort');
+
+      if( userSort ) {
+        this.$sortSelect.val(userSort);
+      } else {
+        userSort = this.$sortSelect.val();
+      }
+
+      // To avoid dynamic function names, we'll do this:
+      if(userSort === 'top'){
+        this.comments = window.sortBytop(this.comments);
+      }
+      if(userSort === 'recent'){
+        this.comments = window.sortByrecent(this.comments);
+      }
+      if(userSort === 'controversial'){
+        this.comments = window.sortBycontroversial(this.comments);
+      }
+
+      // render to load the initial state
+      this.render();
+
+      // Clear "isSorted" values
+      this.comments = window.clearSorted(this.comments);
+
+      // if the state changes, re-render to reflect the new state
+      this.state.on('change', function(){
+        self.render();
+      });
+
+      this.$sortSelect.on('change', function(){
+        window.utilities.cookies.set('mrsort', self.$sortSelect.val());
+
+        if(self.$sortSelect.val() === 'top'){
+          self.comments = window.sortBytop(self.comments);
+        }
+        if(self.$sortSelect.val() === 'recent'){
+          self.comments = window.sortByrecent(self.comments);
+        }
+        if(self.$sortSelect.val() === 'controversial'){
+          self.comments = window.sortBycontroversial(self.comments);
+        }
+
+        if(self.hasChanged) {
+          window.location.reload(false); 
+        } else {
+          self.render();
+        }
+
+        self.comments = window.clearSorted(self.comments);
+
+      });
+
+      $(window).on('popstate', function(){
+        this.checkState();
+      });
+    },
+
+    checkState: function() {
+      var self = this,
+        params = [
+          'commentID'
+        ],
+        isChanged = false;
+
+      // If param exists in the url and it's different than our current state, write to state
+      _.each(params, function(param){
+        var urlVal = self.utilities.getQueryParam(param, window.location.href);
+        if(
+          urlVal !== null &&
+          self.state.get(param) !== urlVal
+        ){
+          self.state.set(param, urlVal);
+          isChanged = true;
+        }
+      });
+
+      if(isChanged) {
+        self.render();
+      }
+    },
+
+    scrollToTop: function(){
+      var self = this;
+
+      $([document.documentElement, document.body]).animate({
+        scrollTop: self.$el.offset().top
+      }, 500);
+    },
+
+    // Searches recursively through a thread of comments to see if the comment in question resides therein
+    checkThread: function(comment){
+      var self = this,
+      id = comment.id;
+
+      if(self.state.get('commentID') == comment.id){
+        return comment;
+      }
+
+      if(
+        comment.childrenIDs && 
+        comment.childrenIDs.includes(
+          self.state.get('commentID')
+        )
+      ) {
+        for(i = 0; i < comment.children.length; i++) {
+          result = self.checkThread(comment.children[i]);
+          if(result) {
+            return result;
+          }
+        }
+      }
+
+      return null;
+    },
+
+    // render updates the markup to reflect the current state
+    // the render funtion is idempotent, meaning running it repeatedly should always present a correct result.
+    render: function() {
+      var self = this, 
+        markup = '';
+
+      template = _.template($("#JST__CommentTemplate").html());
+
+      // We've got a collection of comments
+      // Traverse the top level of comments
+      _.each(this.comments, function(comment){
+
+        // If we've got a specific comment to show, let's show that.
+        if(self.state.get('commentID')) {
+          var result = self.checkThread(comment);
+          if(result) {
+            // Print Previous Comment Link if previous comments exist
+            markup += "<div class='prev-comment'><a href='?'>← Return to all comments</a></div>";
+
+            markup += template({
+              model: result, 
+              templateFn: template,
+              startingDepth: result.depth,
+              maxDepth: self.getMaxVisibleDepth(result.depth)
+            });
+          }
+
+        // Otherwise, we're showing all of them, so render the comment
+        } else {
+          markup += template({
+            model: comment, 
+            templateFn: template,
+            startingDepth: comment.depth,
+            maxDepth: self.getMaxVisibleDepth(comment.depth)
+          });
+        }
+      });
+
+      // idempotent rewrite of anything in the container
+      self.$el.html(markup);
+
+      //Re-initialize the hide replies buttons
+      $('.toggle-replies-btn').on('click', function(e) {
+        e.preventDefault();
+        var $parent = $(this).closest('.blog-comment');
+
+        if ($(this).attr('data-toggle') == 'hide') {
+          $(this).attr('data-toggle', 'show');
+          $(this).text('Show Replies');
+          $parent.find('.blog-comment').hide();
+        } else {
+          $(this).attr('data-toggle', 'hide');
+          $(this).text('Hide Replies');
+          $parent.find('.blog-comment').show();
+        }
+      });
+
+      $('.comment-vote').on('click', function(e) {
+        var $voteButton = $(this),
+          $parentComment = $(this).closest('.blog-comment'), 
+          initialVoteCount, userVote, newVote;
+
+        // Identify that votes have changed
+        self.hasChanged = true;
+
+        // Collect Current State of Votes
+
+        // What's the current vote total?
+        initialVoteCount = parseInt($parentComment.attr('data-vote-total'));
+
+        // What are the relevant vote counts?
+        initialUpdoots = parseInt($parentComment.attr('data-updoots'));
+        initialDownboops = parseInt($parentComment.attr('data-downboops'));
+
+        // Does the user have an existing user vote?
+        userVote = $parentComment.attr('data-user-vote');
+
+        // What's the new vote?
+        newVote = $voteButton.attr('data-action') == 'upvote' ? 1 : -1;
+
+        // If the vote is the opposite of the original vote, we're counting that as a null (vote removal)
+        if(newVote == (userVote * -1)) {
+          newVote = null;
+        }
+
+        // Communicate with server to publish the vote
+        $.ajax(
+          '/wp-json/endless_thread/v1/vote',
+          {
+            'method': 'POST',
+            'cache': false,
+            'data': {
+              'comment_id': $voteButton.attr('data-id'),
+              'post_id': $voteButton.attr('data-post-id'),
+              'vote': newVote,
+              'nonce': $voteButton.attr('data-nonce')
+            },
+            'complete': function() {
+
+              var newVoteTotal = self.calculateVoteTotal(initialVoteCount, userVote, newVote),
+                newUpdoots = self.calculateUpdoots(initialUpdoots, userVote, newVote),
+                newDownboops = self.calculateDownboops(initialDownboops, userVote, newVote);
+
+              $parentComment.find('> .byline > .comment-voting .comment-vote-total').html(
+                newVoteTotal
+              );
+
+              $parentComment.find('> .byline > .comment-voting .comment-up-count').html(
+                newUpdoots
+              );
+
+              $parentComment.find('> .byline > .comment-voting .comment-down-count').html(
+                newDownboops
+              );
+
+              if(newDownboops > 0) {
+                $parentComment.find('> .byline > .comment-voting .comment-down-count').addClass('is-negative');
+              } else {
+                $parentComment.find('> .byline > .comment-voting .comment-down-count').removeClass('is-negative');
+              }
+
+              $parentComment.attr('data-vote-total', newVoteTotal);
+              $parentComment.attr('data-updoots', newUpdoots);
+              $parentComment.attr('data-downboops', newDownboops);
+
+              $parentComment.attr('data-user-vote', newVote);
+
+              // Undisable all vote buttons on the current comment
+              $parentComment.find('> .byline > .comment-voting .comment-vote').attr('disabled', false);
+    
+              // Disable the one we just used.
+              if(newVote !== null) {
+                $voteButton.attr('disabled', 'disabled');
+              }
+            }
+          }
+        );
+      });
+
+      // When changing state, scroll to the top of the comment list.
+      $('.prev-comment a').on('click', function(e) {
+        e.preventDefault();
+        self.state.set('commentID', null);
+        self.scrollToTop();
+      });
+
+      $('.load-more a').on('click', function(e) {
+        e.preventDefault();
+        self.state.set('commentID', parseInt($(this).attr('data-id')));
+        self.scrollToTop();
+      });
+
+      // Re-implement respond button
+      var commentFormToggle = function() {
+
+        return {
+          bind: function() {
+    
+            $('[data-comment-form-toggle]').on('click', function(e) {
+              e.preventDefault();
+    
+              var $parent = $(this).closest('.comment-respond');
+              var $form = $parent.find('.comment-form');
+    
+              $form.animate({
+                  height: "toggle"
+                }, 400, function() {
+    
+                });
+            });
+    
+          }
+        }
+      }().bind();
+    },
+    calculateUpdoots: function(initialVoteCount, userVote, newVote) {
+      if (parseInt(userVote, 10) === 1 && newVote === null) {
+        return initialVoteCount - 1;
+      }
+
+      if (parseInt(userVote, 10) === 1 && newVote === -1) {
+        return initialVoteCount - 1;
+      }
+      
+      if (newVote === 1) {
+        return initialVoteCount + newVote;
+      }
+
+      return initialVoteCount;
+    },
+    calculateDownboops: function(initialVoteCount, userVote, newVote) {
+      if (parseInt(userVote, 10) === -1 && newVote === null) {
+        return initialVoteCount - 1;
+      }
+
+      if (parseInt(userVote, 10) === -1 && newVote === 1) {
+        return initialVoteCount - 1;
+      }
+      
+      if (newVote === -1) {
+        return initialVoteCount + (newVote * -1);
+      }
+
+      return initialVoteCount;
+    },
+    calculateVoteTotal: function(initialVoteCount, userVote, newVote) {
+      if(newVote === null) {
+        return initialVoteCount + (userVote * -1);
+      } else if(userVote * newVote === -1){
+        return initialVoteCount + (newVote * 2);
+      }
+      
+      return initialVoteCount + newVote;
+    },
+    getMaxVisibleDepth: function(currentDepth) {
+      return currentDepth + this.state.get('pageDepth');
+    },
+    utilities: {
+      getQueryParam: function(param, url) {
+  
+        var href = url;
+        //this expression is to get the query strings
+        var reg = new RegExp( '[?&]' + param + '=([^&#]*)', 'i' );
+        var queryString = reg.exec(href);
+        return queryString ? queryString[1] : null;
+      },
+      getQueryParams: function(url) {
+        var queryParams = {};
+        //create an anchor tag to use the property called search
+          var anchor = document.createElement('a');
+        //assigning url to href of anchor tag
+          anchor.href = url;
+        //search property returns the query string of url
+          var queryStrings = anchor.search.substring(1);
+          var params = queryStrings.split('&');
+      
+          for (var i = 0; i < params.length; i++) {
+              var pair = params[i].split('=');
+              queryParams[pair[0]] = decodeURIComponent(pair[1]);
+          }
+          return queryParams;
+      }
+    }
+  });
+
+  $(function() {
+    $('.comment_thread').each(function() {
+      var obj = new EndlessThread({
+        el: $(this)
+      });
+    });
+  });
+})(jQuery, Backbone);
