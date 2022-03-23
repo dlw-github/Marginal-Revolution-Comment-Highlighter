@@ -27,4 +27,5 @@ Add the extension to your browser of choice:
 
 ## Screenshot
 
-[Example](https://imgur.com/a/VdL6kwu)
+![Screenshot](https://imgur.com/a/VdL6kwu)
+
