@@ -27,4 +27,4 @@ Add the extension to your browser of choice:
 
 ## Screenshot
 
-[![Google Search Results](https://i.imgur.com/GTBOuEr.png)](https://www.google.com/search?q=Millennials)
+[![Screenshot](https://imgur.com/a/VdL6kwu)]
