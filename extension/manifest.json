@@ -1,9 +1,9 @@
 {
 	"manifest_version": 3,
 
-	"name": "comment_highlighter",
-    "short_name": "comment_highlighter",
-	"description": "comment_highlighter",
+	"name": "Marginal Revolution New Comment Highlighter",
+    "short_name": "MargRev New Comment Highlighter",
+	"description": "Highlights new comments on Marginal Revolution blog posts written after your last visit to the post",
 	"author": "Me",
 	"version": "0.1",
 
@@ -13,7 +13,7 @@
 		{
 			"matches": ["https://*.marginalrevolution.com/marginalrevolution/*"],
 			"all_frames": true,
-			"js": ["stock.js"],
+			"js": ["content_script.js"],
 			"run_at": "document_end"
 		}
 	]
