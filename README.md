@@ -27,5 +27,5 @@ Add the extension to your browser of choice:
 
 ## Screenshot
 
-![Screenshot](screenshot.JPG)
+![Screenshot](source/screenshot.JPG)
 
