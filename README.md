@@ -27,5 +27,5 @@ Add the extension to your browser of choice:
 
 ## Screenshot
 
-![Screenshot](blob/main/screenshot.jpg)
+![Screenshot](screenshot.JPG)
 
