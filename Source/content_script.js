@@ -1,96 +1,94 @@
-function walk(rootNode)
-{
-    // Find all the text nodes in rootNode
-    var walker = document.createTreeWalker(
-        rootNode,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-    ),
-    node;
+// Highlight comment if it was posted after time of last visit
+// Catch error if comment is not displayed on page (for comments several layers deep)
+function highlightComment(obj, last_visit) {
+    var elem_id = 'blog-comment-' + obj['id'];
+    var comment_date = new Date(obj['date']);
 
-    // Modify each text node's value
-    while (node = walker.nextNode()) {
-        handleText(node);
-    }
-}
-
-function handleText(textNode) {
-  textNode.nodeValue = replaceText(textNode.nodeValue);
-}
-
-function replaceText(v)
-{
-    // Fix some misspellings
-    v = v.replace(/\b(M|m)illienial(s)?\b/g, "$1illennial$2");
-    v = v.replace(/\b(M|m)illenial(s)?\b/g, "$1illennial$2");
-    v = v.replace(/\b(M|m)ilennial(s)?\b/g, "$1illennial$2");
-    v = v.replace(/\b(M|m)ilenial(s)?\b/g, "$1illennial$2");
-
-    // Millennial Generation
-    v = v.replace(
-        /\b(?:Millennial Generation)|(?:Generation Millennial)\b/g,
-        "Plissken Faction"
-    );
-    v = v.replace(
-        /\b(?:millennial generation)|(?:generation millennial)\b/g,
-        "Plissken faction"
-    );
-
-    return v;
-}
-
-// Returns true if a node should *not* be altered in any way
-function isForbiddenNode(node) {
-    return node.isContentEditable || // DraftJS and many others
-    (node.parentNode && node.parentNode.isContentEditable) || // Special case for Gmail
-    (node.tagName && (node.tagName.toLowerCase() == "textarea" || // Some catch-alls
-                     node.tagName.toLowerCase() == "input"));
-}
-
-// The callback used for the document body and title observers
-function observerCallback(mutations) {
-    var i, node;
-
-    mutations.forEach(function(mutation) {
-        for (i = 0; i < mutation.addedNodes.length; i++) {
-            node = mutation.addedNodes[i];
-            if (isForbiddenNode(node)) {
-                // Should never operate on user-editable content
-                continue;
-            } else if (node.nodeType === 3) {
-                // Replace the text for text nodes
-                handleText(node);
-            } else {
-                // Otherwise, find text nodes within the given node and replace text
-                walk(node);
-            }
+    if (last_visit < comment_date) {
+        try {
+            document.getElementById(elem_id).style.backgroundColor = '#DEE4E7';
+            console.log('HIGHLIGHT - Author: ' + obj['author'] + ' Date: ' + obj['date']);
         }
-    });
-}
-
-// Walk the doc (document) body, replace the title, and observe the body and title
-function walkAndObserve(doc) {
-    var docTitle = doc.getElementsByTagName('title')[0],
-    observerConfig = {
-        characterData: true,
-        childList: true,
-        subtree: true
-    },
-    bodyObserver, titleObserver;
-
-    // Do the initial text replacements in the document body and title
-    walk(doc.body);
-    doc.title = replaceText(doc.title);
-
-    // Observe the body so that we replace text in any added/modified nodes
-    bodyObserver = new MutationObserver(observerCallback);
-    bodyObserver.observe(doc.body, observerConfig);
-
-    // Observe the title so we can handle any modifications there
-    if (docTitle) {
-        titleObserver = new MutationObserver(observerCallback);
-        titleObserver.observe(docTitle, observerConfig);
+        catch (err) {
+            console.log('\tThis comment off page: Author' + obj['author'] + ' Date: ' + obj['date'] + ' ' + elem_id);
+        }
     }
 }
-walkAndObserve("C:\\Users\\dlwal\\Documents\\GitHub\\marg_rev_comments\\stock.html");
+
+
+// Cycle recursively through comments JSON
+// Stop where there are no child comments
+function traverseJSON(obj, last_visit) {
+    highlightComment(obj, last_visit);
+
+    if (obj['children']) {
+        for (let k in obj['children']) {
+            traverseJSON(obj['children'][k], last_visit);
+        }
+    }
+}
+
+
+// Get time of last visit and list of page comments. 
+// After highlighting new comments, update time of last visit
+function findComments(last_visit) {
+    console.log('SCRIPT START');
+    var title = document.querySelector('.entry-title'); 
+    console.log('Post title: ' + title.textContent);
+
+    if (last_visit === 1) {
+        var last_visit = localStorage.getItem('last_visit');
+        last_visit = new Date(last_visit);
+    }
+
+    console.log('Last visit: ' + last_visit);
+
+    var commentJSON = JSON.parse(document.querySelector('#comments > div > div').getAttribute('data-json'));
+    for (var i = 0; i < commentJSON.length; i++) {
+        traverseJSON(commentJSON[i], last_visit);
+    }
+
+    var timeNow = new Date();
+    localStorage.setItem('last_visit', timeNow);
+    console.log('Current time: ' + timeNow)
+
+    handleLongThreads(last_visit);
+}
+
+// Some long comment threads are shown only after a link is clicked
+// Add event listener for each long thread link 
+function handleLongThreads(last_visit) {
+    console.log('In handleLongThreads');
+    var longThreads = document.querySelectorAll('.load-more');
+    for (var i = 0; i < longThreads.length; i++) {
+        var thread = longThreads[i];
+        thread.addEventListener('click', function() {
+            enterLongThread(thread, last_visit);
+        });
+    }
+}
+
+
+// If a long thread link is clicked, repeat highlight functions on newly shown comments
+// If the user returns to the main post page, return to handleLongThreads
+function enterLongThread(thread, last_visit) {
+    console.log('CLICKED: ' + thread['children'][0]['href']);
+    returnLink = document.querySelector('#comments > div > div > div > a');
+    returnLink.addEventListener('click', function() {
+        console.log('Returned to main');
+        findComments(last_visit);
+    });
+
+    var commentJSON = JSON.parse(document.querySelector('#comments > div > div').getAttribute('data-json'));
+    for (var i = 0; i < commentJSON.length; i++) {
+        traverseJSON(commentJSON[i], last_visit);
+    }
+}
+
+
+// Fire script after DOM has finished loading
+// Send dummy parameter to distinguish between re-entering post page from its own comment thread
+window.onload = function () {
+    findComments(1);
+}
+

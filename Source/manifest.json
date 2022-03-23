@@ -1,23 +1,17 @@
 {
 	"manifest_version": 2,
 
-	"name": "Millennials to Snake People",
-    "short_name": "Snake People",
-	"description": "Replaces the text 'Millennial' with 'Snake People'.",
-	"author": "Eric Bailey",
-	"version": "2.3",
+	"name": "Marginal Revolution New Comment Highlighter",
+    "short_name": "MargRev New Comment Highlighter",
+	"description": "Highlights new comments on Marginal Revolution blog posts written after your last visit to the post",
+	"author": "Me",
+	"version": "0.1",
 
-	"icons": {
-		"16": "icon16.png",
-		"32": "icon32.png",
-		"48": "icon48.png",
-		"128": "icon128.png"
-	},
 
 	"content_scripts":
 	[
 		{
-			"matches": ["*://*/*"],
+			"matches": ["https://*.marginalrevolution.com/marginalrevolution/*"],
 			"all_frames": true,
 			"js": ["content_script.js"],
 			"run_at": "document_end"
