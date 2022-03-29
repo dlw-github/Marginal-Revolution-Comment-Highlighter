@@ -7,10 +7,8 @@ function highlightComment(obj, last_visit) {
     if (last_visit < comment_date) {
         try {
             document.getElementById(elem_id).style.backgroundColor = '#DEE4E7';
-            console.log('HIGHLIGHT - Author: ' + obj['author'] + ' Date: ' + obj['date']);
         }
         catch (err) {
-            console.log('\tThis comment off page: Author' + obj['author'] + ' Date: ' + obj['date'] + ' ' + elem_id);
         }
     }
 }
@@ -32,16 +30,12 @@ function traverseJSON(obj, last_visit) {
 // Get time of last visit and list of page comments. 
 // After highlighting new comments, update time of last visit
 function findComments(last_visit) {
-    console.log('SCRIPT START');
     var title = document.querySelector('.entry-title'); 
-    console.log('Post title: ' + title.textContent);
 
     if (last_visit === 1) {
         var last_visit = localStorage.getItem('last_visit');
         last_visit = new Date(last_visit);
     }
-
-    console.log('Last visit: ' + last_visit);
 
     var commentJSON = JSON.parse(document.querySelector('#comments > div > div').getAttribute('data-json'));
     for (var i = 0; i < commentJSON.length; i++) {
@@ -50,7 +44,6 @@ function findComments(last_visit) {
 
     var timeNow = new Date();
     localStorage.setItem('last_visit', timeNow);
-    console.log('Current time: ' + timeNow)
 
     handleLongThreads(last_visit);
 }
@@ -58,7 +51,6 @@ function findComments(last_visit) {
 // Some long comment threads are shown only after a link is clicked
 // Add event listener for each long thread link 
 function handleLongThreads(last_visit) {
-    console.log('In handleLongThreads');
     var longThreads = document.querySelectorAll('.load-more');
     for (var i = 0; i < longThreads.length; i++) {
         var thread = longThreads[i];
@@ -72,10 +64,8 @@ function handleLongThreads(last_visit) {
 // If a long thread link is clicked, repeat highlight functions on newly shown comments
 // If the user returns to the main post page, return to handleLongThreads
 function enterLongThread(thread, last_visit) {
-    console.log('CLICKED: ' + thread['children'][0]['href']);
     returnLink = document.querySelector('#comments > div > div > div > a');
     returnLink.addEventListener('click', function() {
-        console.log('Returned to main');
         findComments(last_visit);
     });
 
