@@ -2,7 +2,7 @@
 Browswer extension for Chrome that highlights new comments that have appeared on Marginal Revolution blog posts since your last visit.
 
 ## Installation
-Add to [Chrome](https://chrome.google.com/webstore/detail/archivist/bpdhbjagefdaaleabpjffdhbfhnekknd)
+Add to [Chrome](https://chrome.google.com/webstore/detail/marginal-revolution-new-c/epcokaehebppnnfdalpeilibgjocgpde)
 
 
 ## How to disable
